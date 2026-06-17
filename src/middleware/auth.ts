@@ -18,6 +18,7 @@ declare module 'express-session' {
     oauthState?: string;
     oauthCodeVerifier?: string;
     oauthBindUserId?: string;
+    oauthReauthorizeProvider?: string;
   }
 }
 

@@ -9,30 +9,34 @@ import {
   verifyCodeChallenge,
 } from '../utils/pkce';
 import { signAccessToken } from '../utils/jwt';
+import { clientService } from './ClientService';
+import { consentService } from './ConsentService';
 
 export class OAuthService {
   private authCodeRepository: Repository<AuthCode>;
   private refreshTokenRepository: Repository<RefreshToken>;
   private pkceChallengeRepository: Repository<PKCEChallenge>;
 
-  private registeredClients = new Map<string, string>();
-
   constructor() {
     this.authCodeRepository = AppDataSource.getRepository(AuthCode);
     this.refreshTokenRepository = AppDataSource.getRepository(RefreshToken);
     this.pkceChallengeRepository = AppDataSource.getRepository(PKCEChallenge);
-
-    this.registeredClients.set(
-      process.env.CLIENT_ID || 'auth-service-client',
-      process.env.CLIENT_SECRET || 'auth-service-secret'
-    );
   }
 
-  validateClient(clientId: string, clientSecret?: string): boolean {
-    const secret = this.registeredClients.get(clientId);
-    if (!secret) return false;
-    if (clientSecret && secret !== clientSecret) return false;
-    return true;
+  async validateClient(clientId: string, clientSecret?: string) {
+    return clientService.validateClient(clientId, clientSecret);
+  }
+
+  async validateRedirectUri(clientId: string, redirectUri: string): Promise<boolean> {
+    return clientService.validateRedirectUri(clientId, redirectUri);
+  }
+
+  async validateScopes(clientId: string, scopes: string[]): Promise<boolean> {
+    return clientService.validateScopes(clientId, scopes);
+  }
+
+  async isConsentGiven(clientId: string, userId: string, scopes: string[]): Promise<boolean> {
+    return consentService.isConsentGiven(clientId, userId, scopes);
   }
 
   async savePKCEChallenge(state: string, codeVerifier: string): Promise<void> {
@@ -73,6 +77,10 @@ export class OAuthService {
     });
     await this.authCodeRepository.save(authCode);
     return code;
+  }
+
+  async recordConsent(clientId: string, userId: string, scope: string[]): Promise<void> {
+    await consentService.createOrUpdate(clientId, userId, scope);
   }
 
   async exchangeCodeForToken(

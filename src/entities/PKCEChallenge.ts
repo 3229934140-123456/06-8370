@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
-@Entity()
+@Entity('pkce_challenge')
 export class PKCEChallenge {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,0 +1,70 @@
+<%- include('header') %>
+
+<div class="card" style="max-width: 700px; margin: 0 auto;">
+    <h2><%= client && client.id ? '编辑客户端' : '新建客户端' %></h2>
+
+    <% if (error) { %>
+        <div class="alert alert-error"><%= error %></div>
+    <% } %>
+    <% if (success) { %>
+        <div class="alert alert-success"><%= success %></div>
+    <% } %>
+
+    <form method="POST" action="<%= client && client.id ? '/admin/clients/' + client.id : '/admin/clients' %>">
+        <div class="form-group">
+            <label>客户端名称 *</label>
+            <input type="text" name="name" value="<%= client ? client.name : '' %>" placeholder="例如：我的应用" required>
+        </div>
+
+        <div class="form-group">
+            <label>描述</label>
+            <input type="text" name="description" value="<%= client ? client.description : '' %>" placeholder="简短描述">
+        </div>
+
+        <% if (client && client.id) { %>
+            <div class="form-group">
+                <label>Client ID</label>
+                <input type="text" value="<%= client.clientId %>" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Client Secret</label>
+                <input type="text" value="<%= client.clientSecret %>" readonly style="background: #f5f5f5; font-family: monospace;">
+                <p class="hint">请妥善保管，泄露后请立即重置</p>
+            </div>
+        <% } %>
+
+        <div class="form-group">
+            <label>允许的回调地址 *</label>
+            <textarea name="redirectUris" rows="3" style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 13px;" placeholder="每行一个地址，例如：
+http://localhost:3000/callback
+https://example.com/oauth/callback"><%= client ? client.redirectUris.join('\n') : '' %></textarea>
+            <p class="hint">每行一个完整的URL，支持通配符后缀如 http://localhost:3000/*</p>
+        </div>
+
+        <div class="form-group">
+            <label>允许的授权范围 *</label>
+            <input type="text" name="allowedScopes" value="<%= client ? client.allowedScopes.join(' ') : 'openid profile email' %>" placeholder="openid profile email">
+            <p class="hint">用空格或逗号分隔，可用 scope：openid, profile, email, phone, read:user, write:user</p>
+        </div>
+
+        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="requireConsent" <%= client && client.requireConsent ? 'checked' : (client ? '' : 'checked') %>>
+                需要用户授权确认
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="isActive" <%= client && client.isActive === false ? '' : 'checked' %>>
+                启用客户端
+            </label>
+        </div>
+
+        <div class="actions">
+            <a href="/admin/clients" class="btn btn-secondary">取消</a>
+            <button type="submit" class="btn btn-primary">
+                <%= client && client.id ? '保存修改' : '创建客户端' %>
+            </button>
+        </div>
+    </form>
+</div>
+
+<%- include('footer') %>

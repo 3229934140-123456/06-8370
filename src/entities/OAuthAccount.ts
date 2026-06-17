@@ -3,7 +3,7 @@ import { User } from './User';
 
 export type ProviderType = 'github' | 'google' | 'wechat';
 
-@Entity()
+@Entity('oauth_account')
 export class OAuthAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;

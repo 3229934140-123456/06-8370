@@ -55,6 +55,8 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
   }
 
   const codeVerifier = req.session?.oauthCodeVerifier;
+  const bindUserId = req.session?.oauthBindUserId;
+  const reauthorizeProvider = req.session?.oauthReauthorizeProvider;
 
   try {
     const oauthProvider = getProvider(provider)!;
@@ -63,9 +65,24 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     if (req.session) {
       delete req.session.oauthState;
       delete req.session.oauthCodeVerifier;
+      delete req.session.oauthReauthorizeProvider;
     }
 
-    const bindUserId = req.session?.oauthBindUserId;
+    if (reauthorizeProvider === provider) {
+      if (!bindUserId) {
+        return res.redirect('/profile?error=' + encodeURIComponent('会话已过期，请重新操作'));
+      }
+      delete req.session!.oauthBindUserId;
+
+      const existingAccount = await oauthAccountService.findByProvider(provider, userInfo.providerUserId);
+      if (existingAccount && existingAccount.userId !== bindUserId) {
+        return res.redirect('/profile?error=' + encodeURIComponent('该三方账号已被其他用户绑定'));
+      }
+
+      await oauthAccountService.createOrUpdate(bindUserId, provider, userInfo);
+      return res.redirect('/profile?success=' + encodeURIComponent(`${getProviderDisplayName(provider)}重新授权成功`));
+    }
+
     if (bindUserId) {
       delete req.session!.oauthBindUserId;
 

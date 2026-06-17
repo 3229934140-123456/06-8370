@@ -138,4 +138,21 @@ router.post('/profile/unbind/:provider', authRequired, async (req: Request, res:
   }
 });
 
+router.post('/profile/reauthorize/:provider', authRequired, async (req: Request, res: Response) => {
+  const { provider } = req.params;
+  if (!isValidProvider(provider)) {
+    return res.redirect('/profile?error=' + encodeURIComponent('不支持的身份提供商'));
+  }
+
+  const currentUser = getCurrentUser(req);
+  if (!currentUser) return res.redirect('/login');
+
+  if (req.session) {
+    req.session.oauthBindUserId = currentUser.userId;
+    req.session.oauthReauthorizeProvider = provider;
+  }
+
+  res.redirect(`/auth/${provider}`);
+});
+
 export default router;

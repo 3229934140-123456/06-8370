@@ -10,11 +10,15 @@ import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
 import oauth2Routes from './routes/oauth2';
 import profileRoutes from './routes/profile';
+import adminRoutes from './routes/admin';
 import indexRoutes from './routes/index';
 import { optionalAuth } from './middleware/auth';
 
+import { ClientService } from './services/ClientService';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+const clientService = new ClientService();
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '..', 'views'));
@@ -49,9 +53,11 @@ app.use('/', authRoutes);
 app.use('/auth', oauthRoutes);
 app.use('/oauth2', oauth2Routes);
 app.use('/', profileRoutes);
+app.use('/', adminRoutes);
 
 AppDataSource.initialize()
   .then(() => initializeDatabase(AppDataSource))
+  .then(() => clientService.seedDefaultClient())
   .then(() => {
     console.log('数据库连接成功');
     app.listen(PORT, () => {

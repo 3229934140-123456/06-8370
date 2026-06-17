@@ -92,26 +92,54 @@
             <% availableProviders.forEach(function(p) { %>
                 <% const account = oauthAccounts.find(a => a.provider === p.type); %>
                 <li>
-                    <div class="account-info">
+                    <div class="account-info" style="flex: 1;">
                         <span class="provider-icon">
                             <% if (p.type === 'github') { %>🐙<% } %>
                             <% if (p.type === 'google') { %>🔍<% } %>
                             <% if (p.type === 'wechat') { %>💬<% } %>
                         </span>
-                        <div>
-                            <strong><%= p.name %></strong>
-                            <% if (account) { %>
-                                <span class="status-bound account-status" style="margin-left: 8px;">已绑定</span>
-                                <% if (account.tokenRefreshFailed) { %>
-                                    <span class="status-failed account-status" style="margin-left: 8px;">Token失效，请重新绑定</span>
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <strong><%= p.name %></strong>
+                                <% if (account) { %>
+                                    <span class="status-bound account-status">已绑定</span>
+                                    <% if (account.tokenRefreshFailed) { %>
+                                        <span class="status-failed account-status">Token失效</span>
+                                    <% } else if (account.expiresAt && new Date(account.expiresAt) < new Date()) { %>
+                                        <span class="account-status" style="background: #fff3cd; color: #856404;">已过期</span>
+                                    <% } else if (account.expiresAt) { %>
+                                        <span class="account-status" style="background: #d4edda; color: #155724;">有效</span>
+                                    <% } %>
+                                <% } else { %>
+                                    <span class="status-unbound account-status">未绑定</span>
                                 <% } %>
-                            <% } else { %>
-                                <span class="status-unbound account-status" style="margin-left: 8px;">未绑定</span>
+                            </div>
+                            <% if (account) { %>
+                                <div style="font-size: 12px; color: #888; margin-top: 4px;">
+                                    <% if (account.expiresAt) { %>
+                                        过期时间: <%= new Date(account.expiresAt).toLocaleString('zh-CN') %>
+                                    <% } %>
+                                    <% if (account.updatedAt) { %>
+                                        · 最近更新: <%= new Date(account.updatedAt).toLocaleString('zh-CN') %>
+                                    <% } %>
+                                    <% if (account.scope) { %>
+                                        · 权限: <%= account.scope %>
+                                    <% } %>
+                                </div>
                             <% } %>
                         </div>
                     </div>
-                    <div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                         <% if (account) { %>
+                            <% if (account.tokenRefreshFailed || (account.expiresAt && new Date(account.expiresAt) < new Date())) { %>
+                                <form method="POST" action="/profile/reauthorize/<%= p.type %>" style="display: inline;">
+                                    <button type="submit" class="btn btn-primary">重新授权</button>
+                                </form>
+                            <% } else { %>
+                                <form method="POST" action="/profile/reauthorize/<%= p.type %>" style="display: inline;">
+                                    <button type="submit" class="btn btn-secondary">刷新授权</button>
+                                </form>
+                            <% } %>
                             <form method="POST" action="/profile/unbind/<%= p.type %>" style="display: inline;" onsubmit="return confirm('确定要解绑<%= p.name %>吗？');">
                                 <button type="submit" class="btn btn-danger" <%= !canUnbind ? 'disabled' : '' %>>
                                     解绑
