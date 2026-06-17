@@ -2,9 +2,22 @@ import { Request, Response, Router } from 'express';
 import { clientService } from '../services/ClientService';
 import { authRequired, getCurrentUser } from '../middleware/auth';
 import { getScopeDescriptions } from '../config/scopes';
+import { getDuplicatesFromDataSource } from '../db-init';
+import { AppDataSource } from '../data-source';
 import * as crypto from 'crypto';
 
 const router = Router();
+
+router.get('/admin/duplicates', authRequired, async (req: Request, res: Response) => {
+  const user = getCurrentUser(req);
+  if (!user) return res.redirect('/login');
+
+  const duplicates = await getDuplicatesFromDataSource(AppDataSource);
+  res.render('admin-duplicates', {
+    duplicates,
+    title: '数据冲突报告',
+  });
+});
 
 router.get('/admin/clients', authRequired, async (req: Request, res: Response) => {
   const user = getCurrentUser(req);

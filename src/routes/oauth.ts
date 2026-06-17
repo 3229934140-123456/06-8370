@@ -134,6 +134,9 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
         params.set('code_challenge', pa.code_challenge);
         params.set('code_challenge_method', pa.code_challenge_method);
       }
+      if (pa.state) {
+        params.set('state', pa.state);
+      }
       return res.redirect(`/oauth2/authorize?${params.toString()}`);
     }
 

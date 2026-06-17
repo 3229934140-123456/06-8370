@@ -143,7 +143,7 @@ async function performBackup(dbPath: string | null, report: MigrationReport): Pr
   }
 }
 
-async function checkDuplicateData(queryRunner: any): Promise<DuplicateReport[]> {
+export async function checkDuplicateData(queryRunner: any): Promise<DuplicateReport[]> {
   console.log('🔍 正在检查重复数据...');
   const duplicates: DuplicateReport[] = [];
 
@@ -500,4 +500,13 @@ async function printDatabaseSummary(queryRunner: any, report: MigrationReport): 
 
 export function getDuplicateDataReport() {
   return { MIGRATION_VERSION };
+}
+
+export async function getDuplicatesFromDataSource(ds: DataSource): Promise<DuplicateReport[]> {
+  const queryRunner = ds.createQueryRunner();
+  try {
+    return checkDuplicateData(queryRunner);
+  } finally {
+    await queryRunner.release();
+  }
 }

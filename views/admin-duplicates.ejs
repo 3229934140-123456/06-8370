@@ -1,0 +1,75 @@
+<%- include('header') %>
+
+<div class="card">
+    <h2>📊 数据冲突报告</h2>
+    <p class="hint" style="margin-bottom: 24px;">
+        本页面显示用户表中邮箱和手机号的重复数据。发现冲突后建议尽快清理，否则无法创建唯一索引，
+        可能导致邮箱/手机号重复的账号被创建。
+    </p>
+
+    <% if (duplicates.length === 0) { %>
+        <div class="alert alert-success" style="margin-top: 16px;">
+            ✅ 未发现任何重复数据，数据库状态健康。
+        </div>
+    <% } else { %>
+        <% duplicates.forEach(function(dup) { %>
+            <div style="border: 1px solid #f5c6cb; border-radius: 12px; margin-bottom: 24px; overflow: hidden;">
+                <div style="background: #f8d7da; color: #721c24; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong style="font-size: 16px;">
+                            <% if (dup.field === 'email') { %>📧<% } else { %>📱<% } %>
+                            <%= dup.field === 'email' ? '邮箱' : '手机号' %> 冲突
+                        </strong>
+                        <span class="badge" style="background: #721c24; color: #fff; margin-left: 12px;">
+                            <%= dup.count %> 组重复
+                        </span>
+                    </div>
+                </div>
+                <div style="padding: 20px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #eee;">
+                                <th style="padding: 12px; text-align: left; color: #555;">冲突值</th>
+                                <th style="padding: 12px; text-align: left; color: #555;">涉及用户数</th>
+                                <th style="padding: 12px; text-align: left; color: #555;">用户ID列表</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% dup.items.forEach(function(item) { %>
+                                <tr style="border-bottom: 1px solid #f5f5f5;">
+                                    <td style="padding: 12px; font-family: monospace; font-weight: bold; color: #721c24;">
+                                        <%= item.value %>
+                                    </td>
+                                    <td style="padding: 12px;">
+                                        <span class="badge" style="background: #ff4757; color: #fff;">
+                                            <%= item.ids.length %> 个用户
+                                        </span>
+                                    </td>
+                                    <td style="padding: 12px; font-family: monospace; font-size: 12px; color: #666;">
+                                        <%= item.ids.join(', ') %>
+                                    </td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <% }); %>
+
+        <div class="alert alert-error" style="margin-top: 8px;">
+            <strong>⚠️  处理建议：</strong>
+            <ol style="margin: 12px 0 0 24px; font-size: 13px; line-height: 1.8;">
+                <li>优先保留创建时间最早的账号（通常是真实用户）</li>
+                <li>将重复的账号合并到主账号（三方绑定记录等迁移到主账号）</li>
+                <li>清理完所有冲突后，重新启动服务以自动创建唯一索引</li>
+                <li>或者删除不需要的重复账号，然后再启动服务</li>
+            </ol>
+        </div>
+    <% } %>
+
+    <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #eee;">
+        <a href="/admin/clients" class="btn btn-secondary">← 返回客户端管理</a>
+    </div>
+</div>
+
+<%- include('footer') %>

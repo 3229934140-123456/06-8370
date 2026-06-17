@@ -67,27 +67,27 @@ router.get('/authorize', async (req: Request, res: Response) => {
         scope: scope as string || 'openid',
         code_challenge: (code_challenge as string) || '',
         code_challenge_method: (code_challenge_method as string) || '',
+        state: (state as string) || '',
       };
     }
     return res.redirect('/login');
   }
 
-  if (client.requireConsent) {
-    const consentGiven = await oauthService.isConsentGiven(client_id as string, user.userId, scopes);
-    if (consentGiven) {
-      const code = await oauthService.generateAuthCode(
-        client_id as string,
-        user.userId,
-        redirectUri,
-        scopes,
-        code_challenge as string,
-        code_challenge_method as string
-      );
-      const redirectUrl = new URL(redirectUri);
-      redirectUrl.searchParams.set('code', code);
-      if (state) redirectUrl.searchParams.set('state', state as string);
-      return res.redirect(redirectUrl.toString());
-    }
+  const consentGiven = await oauthService.isConsentGiven(client_id as string, user.userId, scopes);
+
+  if (!client.requireConsent || consentGiven) {
+    const code = await oauthService.generateAuthCode(
+      client_id as string,
+      user.userId,
+      redirectUri,
+      scopes,
+      code_challenge as string,
+      code_challenge_method as string
+    );
+    const redirectUrl = new URL(redirectUri);
+    redirectUrl.searchParams.set('code', code);
+    if (state) redirectUrl.searchParams.set('state', state as string);
+    return res.redirect(redirectUrl.toString());
   }
 
   const fullUser = await userService.findById(user.userId);
@@ -110,24 +110,43 @@ router.get('/authorize', async (req: Request, res: Response) => {
 router.post('/authorize', async (req: Request, res: Response) => {
   const user = getCurrentUser(req);
   if (!user) {
+    if (req.session) {
+      req.session.pendingAuthorize = {
+        client_id: req.body.client_id,
+        redirect_uri: req.body.redirect_uri,
+        scope: req.body.scope || 'openid',
+        code_challenge: req.body.code_challenge || '',
+        code_challenge_method: req.body.code_challenge_method || '',
+        state: req.body.state || '',
+      };
+    }
     return res.redirect('/login');
   }
 
   const { client_id, redirect_uri, scope, code_challenge, code_challenge_method, action, state } = req.body;
   const scopes = scope ? scope.split(' ') : ['openid'];
+  const redirectUri = redirect_uri as string;
 
   const client = await oauthService.validateClient(client_id as string);
   if (!client) {
     return res.status(400).json({ error: '无效的客户端' });
   }
 
-  if (!await oauthService.validateRedirectUri(client_id as string, redirect_uri as string)) {
-    return res.status(400).json({ error: '回调地址未在白名单中' });
+  if (!await oauthService.validateRedirectUri(client_id as string, redirectUri)) {
+    return res.status(400).json({
+      error: 'invalid_redirect_uri',
+      error_description: '回调地址未在白名单中',
+    });
+  }
+
+  if (!await oauthService.validateScopes(client_id as string, scopes)) {
+    const errUrl = await buildRedirectError(redirectUri, 'invalid_scope', '请求的scope不在允许范围内', state as string);
+    return res.redirect(errUrl);
   }
 
   if (action === 'deny') {
     const errUrl = await buildRedirectError(
-      redirect_uri as string,
+      redirectUri,
       'access_denied',
       '用户拒绝授权',
       state as string
@@ -138,7 +157,7 @@ router.post('/authorize', async (req: Request, res: Response) => {
   const code = await oauthService.generateAuthCode(
     client_id as string,
     user.userId,
-    redirect_uri as string,
+    redirectUri,
     scopes,
     code_challenge || undefined,
     code_challenge_method || undefined
@@ -148,7 +167,7 @@ router.post('/authorize', async (req: Request, res: Response) => {
     await oauthService.recordConsent(client_id as string, user.userId, scopes);
   }
 
-  const redirectUrl = new URL(redirect_uri as string);
+  const redirectUrl = new URL(redirectUri);
   redirectUrl.searchParams.set('code', code);
   if (state) redirectUrl.searchParams.set('state', state as string);
   res.redirect(redirectUrl.toString());
