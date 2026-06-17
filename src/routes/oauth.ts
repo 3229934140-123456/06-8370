@@ -3,10 +3,15 @@ import { getProvider, isValidProvider, getProviderDisplayName } from '../provide
 import { oauthAccountService, OAuthUserInfo } from '../services/OAuthAccountService';
 import { userService } from '../services/UserService';
 import { signAccessToken } from '../utils/jwt';
+import { generateCodeVerifier, generateCodeChallenge } from '../utils/pkce';
 import { authRequired, getCurrentUser } from '../middleware/auth';
 import { ProviderType } from '../entities/OAuthAccount';
 
 const router = Router();
+
+function generateState(): string {
+  return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
 
 router.get('/:provider', (req: Request, res: Response) => {
   const { provider } = req.params;
@@ -14,15 +19,18 @@ router.get('/:provider', (req: Request, res: Response) => {
     return res.status(400).json({ error: '不支持的身份提供商' });
   }
 
-  const currentUser = getCurrentUser(req);
-  const state = `${provider}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const state = generateState();
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const codeChallengeMethod = 'S256';
 
   if (req.session) {
     req.session.oauthState = state;
+    req.session.oauthCodeVerifier = codeVerifier;
   }
 
-  const oauthProvider = getProvider(provider);
-  const authUrl = oauthProvider!.getAuthorizationUrl(state);
+  const oauthProvider = getProvider(provider)!;
+  const authUrl = oauthProvider.getAuthorizationUrl(state, codeChallenge, codeChallengeMethod);
   res.redirect(authUrl);
 });
 
@@ -46,12 +54,15 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     return res.redirect('/login?error=' + encodeURIComponent('缺少授权码'));
   }
 
+  const codeVerifier = req.session?.oauthCodeVerifier;
+
   try {
     const oauthProvider = getProvider(provider)!;
-    const userInfo = await oauthProvider.exchangeCodeForToken(code as string);
+    const userInfo = await oauthProvider.exchangeCodeForToken(code as string, codeVerifier);
 
     if (req.session) {
       delete req.session.oauthState;
+      delete req.session.oauthCodeVerifier;
     }
 
     const bindUserId = req.session?.oauthBindUserId;
@@ -131,14 +142,14 @@ router.post('/:provider/bind', authRequired, async (req: Request, res: Response)
     return res.status(401).json({ error: '未登录' });
   }
 
-  const { code } = req.body;
+  const { code, code_verifier } = req.body;
   if (!code) {
     return res.status(400).json({ error: '缺少授权码' });
   }
 
   try {
     const oauthProvider = getProvider(provider)!;
-    const userInfo = await oauthProvider.exchangeCodeForToken(code);
+    const userInfo = await oauthProvider.exchangeCodeForToken(code, code_verifier);
 
     const existingAccount = await oauthAccountService.findByProvider(provider, userInfo.providerUserId);
     if (existingAccount && existingAccount.userId !== user.userId) {

@@ -5,11 +5,13 @@ import path from 'path';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import { AppDataSource } from './data-source';
+import { initializeDatabase } from './db-init';
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
 import oauth2Routes from './routes/oauth2';
 import profileRoutes from './routes/profile';
 import indexRoutes from './routes/index';
+import { optionalAuth } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +42,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(optionalAuth);
+
 app.use('/', indexRoutes);
 app.use('/', authRoutes);
 app.use('/auth', oauthRoutes);
@@ -47,6 +51,7 @@ app.use('/oauth2', oauth2Routes);
 app.use('/', profileRoutes);
 
 AppDataSource.initialize()
+  .then(() => initializeDatabase(AppDataSource))
   .then(() => {
     console.log('数据库连接成功');
     app.listen(PORT, () => {
@@ -55,6 +60,8 @@ AppDataSource.initialize()
       console.log(`  服务地址: http://localhost:${PORT}`);
       console.log(`  登录页面: http://localhost:${PORT}/login`);
       console.log(`  个人中心: http://localhost:${PORT}/profile`);
+      console.log(`  授权端点: http://localhost:${PORT}/oauth2/authorize`);
+      console.log(`  Token端点: http://localhost:${PORT}/oauth2/token`);
       console.log(`========================================\n`);
       console.log(`提示: 本服务使用Mock OAuth提供商，无需真实配置即可测试。`);
       console.log(`生产环境请在 .env 中配置真实的OAuth凭证和SMTP信息。\n`);

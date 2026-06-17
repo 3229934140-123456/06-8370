@@ -10,7 +10,7 @@ import { PKCEChallenge } from './entities/PKCEChallenge';
 export const AppDataSource = new DataSource({
   type: 'sqlite',
   database: path.join(__dirname, '..', 'database.sqlite'),
-  synchronize: true,
+  synchronize: false,
   logging: false,
   entities: [User, OAuthAccount, AuthCode, RefreshToken, PKCEChallenge],
   migrations: [],
