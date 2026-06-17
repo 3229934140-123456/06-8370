@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, QueryFailedError } from 'typeorm';
 import { User } from '../entities/User';
 import { AppDataSource } from '../data-source';
 import { hashPassword, comparePassword } from '../utils/jwt';
@@ -39,19 +39,81 @@ export class UserService {
   }
 
   async create(userData: Partial<User>): Promise<User> {
-    const user = this.userRepository.create({
-      ...userData,
-      email: userData.email ? userData.email.toLowerCase() : undefined,
-    });
-    return this.userRepository.save(user);
+    const email = userData.email ? userData.email.toLowerCase() : undefined;
+
+    if (email) {
+      const existing = await this.userRepository.findOne({ where: { email } });
+      if (existing) {
+        throw new Error('UNIQUE_CONSTRAINT:email');
+      }
+    }
+    if (userData.phone) {
+      const existing = await this.userRepository.findOne({ where: { phone: userData.phone } });
+      if (existing) {
+        throw new Error('UNIQUE_CONSTRAINT:phone');
+      }
+    }
+
+    try {
+      const user = this.userRepository.create({
+        ...userData,
+        email,
+      });
+      return await this.userRepository.save(user);
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        const msg = (err as any).message || '';
+        if (msg.includes('UNIQUE') || msg.includes('unique') || msg.includes('duplicate')) {
+          if (msg.includes('email')) {
+            throw new Error('UNIQUE_CONSTRAINT:email');
+          }
+          if (msg.includes('phone')) {
+            throw new Error('UNIQUE_CONSTRAINT:phone');
+          }
+          throw new Error('UNIQUE_CONSTRAINT:unknown');
+        }
+      }
+      throw err;
+    }
   }
 
   async update(id: string, data: Partial<User>): Promise<User | null> {
-    await this.userRepository.update(id, {
-      ...data,
-      email: data.email ? data.email.toLowerCase() : undefined,
-    });
-    return this.findById(id);
+    const email = data.email ? data.email.toLowerCase() : undefined;
+
+    if (email) {
+      const existing = await this.userRepository.findOne({ where: { email } });
+      if (existing && existing.id !== id) {
+        throw new Error('UNIQUE_CONSTRAINT:email');
+      }
+    }
+    if (data.phone) {
+      const existing = await this.userRepository.findOne({ where: { phone: data.phone } });
+      if (existing && existing.id !== id) {
+        throw new Error('UNIQUE_CONSTRAINT:phone');
+      }
+    }
+
+    try {
+      await this.userRepository.update(id, {
+        ...data,
+        email,
+      });
+      return this.findById(id);
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        const msg = (err as any).message || '';
+        if (msg.includes('UNIQUE') || msg.includes('unique') || msg.includes('duplicate')) {
+          if (msg.includes('email')) {
+            throw new Error('UNIQUE_CONSTRAINT:email');
+          }
+          if (msg.includes('phone')) {
+            throw new Error('UNIQUE_CONSTRAINT:phone');
+          }
+          throw new Error('UNIQUE_CONSTRAINT:unknown');
+        }
+      }
+      throw err;
+    }
   }
 
   async setPassword(userId: string, password: string): Promise<void> {
@@ -62,27 +124,6 @@ export class UserService {
   async verifyPassword(user: User, password: string): Promise<boolean> {
     if (!user.passwordHash) return false;
     return comparePassword(password, user.passwordHash);
-  }
-
-  async mergeUsers(sourceUserId: string, targetUserId: string): Promise<User> {
-    const sourceUser = await this.findById(sourceUserId);
-    const targetUser = await this.findById(targetUserId);
-
-    if (!sourceUser || !targetUser) {
-      throw new Error('用户不存在');
-    }
-
-    if (!targetUser.nickname && sourceUser.nickname) {
-      targetUser.nickname = sourceUser.nickname;
-    }
-    if (!targetUser.avatar && sourceUser.avatar) {
-      targetUser.avatar = sourceUser.avatar;
-    }
-
-    await this.userRepository.save(targetUser);
-    await this.userRepository.delete(sourceUserId);
-
-    return this.findById(targetUserId) as Promise<User>;
   }
 }
 

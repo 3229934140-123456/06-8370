@@ -5,7 +5,7 @@ import { oauthAccountService } from '../services/OAuthAccountService';
 import { getProviderDisplayName, isValidProvider, getProvider } from '../providers';
 import { ProviderType } from '../entities/OAuthAccount';
 import { comparePassword } from '../utils/jwt';
-import { generateCodeVerifier, generateCodeChallenge } from '../utils/pkce';
+import { generateState } from '../utils/pkce';
 
 const router = Router();
 
@@ -52,11 +52,12 @@ router.post('/profile/update', authRequired, async (req: Request, res: Response)
   const { nickname, email, phone } = req.body;
 
   try {
+    const currentUserData = await userService.findById(currentUser.userId);
     let existingUser = null;
-    if (email && email !== (await userService.findById(currentUser.userId))?.email) {
+    if (email && email !== currentUserData?.email) {
       existingUser = await userService.findByEmail(email);
     }
-    if (!existingUser && phone && phone !== (await userService.findById(currentUser.userId))?.phone) {
+    if (!existingUser && phone && phone !== currentUserData?.phone) {
       existingUser = await userService.findByPhone(phone);
     }
 
@@ -66,8 +67,9 @@ router.post('/profile/update', authRequired, async (req: Request, res: Response)
 
     await userService.update(currentUser.userId, { nickname, email, phone });
     res.redirect('/profile?success=' + encodeURIComponent('个人信息更新成功'));
-  } catch (err) {
-    res.redirect('/profile?error=' + encodeURIComponent('更新失败'));
+  } catch (err: any) {
+    const msg = err?.message?.includes('UNIQUE') ? '该邮箱或手机号已被使用' : '更新失败';
+    res.redirect('/profile?error=' + encodeURIComponent(msg));
   }
 });
 
@@ -117,16 +119,14 @@ router.post('/profile/bind/:provider', authRequired, async (req: Request, res: R
     return res.redirect('/profile?error=' + encodeURIComponent('不支持的身份提供商'));
   }
 
-  const state = `bind_${Date.now()}`;
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const state = `bind_${provider}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   if (req.session) {
     req.session.oauthState = state;
-    req.session.oauthCodeVerifier = codeVerifier;
+    req.session.oauthBindUserId = currentUser.userId;
   }
 
-  const authUrl = oauthProvider.getAuthorizationUrl(state, codeChallenge, 'S256');
+  const authUrl = oauthProvider.getAuthorizationUrl(state);
   res.redirect(authUrl);
 });
 

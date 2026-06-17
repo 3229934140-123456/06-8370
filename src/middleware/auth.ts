@@ -8,11 +8,16 @@ declare module 'express-session' {
       provider: string;
       userInfo: any;
     };
+    pendingAuthorize?: {
+      client_id: string;
+      redirect_uri: string;
+      scope: string;
+      code_challenge: string;
+      code_challenge_method: string;
+    };
     oauthState?: string;
     oauthCodeVerifier?: string;
-    oauthClientId?: string;
-    oauthRedirectUri?: string;
-    oauthScope?: string[];
+    oauthBindUserId?: string;
   }
 }
 

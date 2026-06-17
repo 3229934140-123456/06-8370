@@ -13,7 +13,7 @@ export interface ProviderConfig {
 
 export interface OAuthProvider {
   getAuthorizationUrl(state: string, codeChallenge?: string, codeChallengeMethod?: string): string;
-  exchangeCodeForToken(code: string): Promise<OAuthUserInfo>;
+  exchangeCodeForToken(code: string, codeVerifier?: string): Promise<OAuthUserInfo>;
   refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresIn: number } | null>;
   refreshAccountToken(account: {
     id: string;
@@ -38,7 +38,7 @@ export abstract class BaseOAuthProvider implements OAuthProvider {
     codeChallengeMethod?: string
   ): string;
 
-  abstract exchangeCodeForToken(code: string): Promise<OAuthUserInfo>;
+  abstract exchangeCodeForToken(code: string, codeVerifier?: string): Promise<OAuthUserInfo>;
 
   abstract refreshAccessToken(
     refreshToken: string

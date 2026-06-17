@@ -27,7 +27,7 @@ export class GitHubProvider extends BaseOAuthProvider {
     return `${this.config.authorizationUrl}?${params.toString()}`;
   }
 
-  async exchangeCodeForToken(code: string): Promise<OAuthUserInfo> {
+  async exchangeCodeForToken(code: string, _codeVerifier?: string): Promise<OAuthUserInfo> {
     if (process.env.GITHUB_CLIENT_ID === 'github-dev-client-id') {
       return this.mockExchangeCode(code);
     }

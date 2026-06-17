@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index } from 'typeorm';
 import { OAuthAccount } from './OAuthAccount';
 
 @Entity()
@@ -7,9 +7,11 @@ export class User {
   id: string;
 
   @Column({ nullable: true })
+  @Index({ unique: true })
   email: string;
 
   @Column({ nullable: true })
+  @Index({ unique: true })
   phone: string;
 
   @Column({ nullable: true })

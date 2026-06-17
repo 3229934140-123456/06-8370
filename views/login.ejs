@@ -12,7 +12,6 @@
         <% } %>
 
         <form method="POST" action="/login/password">
-            <input type="hidden" name="redirect" value="<%= redirect || '/' %>">
             <div class="form-group">
                 <label>邮箱或手机号</label>
                 <input type="text" name="identifier" placeholder="请输入邮箱或手机号" required>

@@ -27,7 +27,7 @@ export class WeChatProvider extends BaseOAuthProvider {
     return `${this.config.authorizationUrl}?${params.toString()}#wechat_redirect`;
   }
 
-  async exchangeCodeForToken(code: string): Promise<OAuthUserInfo> {
+  async exchangeCodeForToken(code: string, _codeVerifier?: string): Promise<OAuthUserInfo> {
     if (process.env.WECHAT_APP_ID === 'wx-dev-app-id') {
       return this.mockExchangeCode(code);
     }

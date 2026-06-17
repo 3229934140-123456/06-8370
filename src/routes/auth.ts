@@ -1,56 +1,74 @@
 import { Request, Response, Router } from 'express';
 import { userService } from '../services/UserService';
+import { oauthAccountService, OAuthUserInfo } from '../services/OAuthAccountService';
 import { signAccessToken, comparePassword } from '../utils/jwt';
 
 const router = Router();
 
+function redirectAfterLogin(req: Request, res: Response, userId: string, email?: string) {
+  const token = signAccessToken({ userId, email });
+  res.cookie('access_token', token, {
+    httpOnly: true,
+    maxAge: 3600 * 1000,
+    sameSite: 'lax',
+  });
+  if (req.session) {
+    req.session.user = { userId, email };
+  }
+
+  if (req.session?.pendingAuthorize) {
+    const pa = req.session.pendingAuthorize;
+    delete req.session.pendingAuthorize;
+    const params = new URLSearchParams({
+      client_id: pa.client_id,
+      redirect_uri: pa.redirect_uri,
+      response_type: 'code',
+      scope: pa.scope,
+    });
+    if (pa.code_challenge) {
+      params.set('code_challenge', pa.code_challenge);
+      params.set('code_challenge_method', pa.code_challenge_method);
+    }
+    return res.redirect(`/oauth2/authorize?${params.toString()}`);
+  }
+
+  res.redirect('/');
+}
+
 router.get('/login', (req: Request, res: Response) => {
   const error = req.query.error as string;
   const success = req.query.success as string;
-  const redirect = req.query.redirect as string || '/';
-  res.render('login', { error, success, redirect, title: '登录' });
+
+  if (req.session?.pendingAuthorize) {
+    res.render('login', {
+      error: error || '请先登录，登录后将跳转到授权确认页',
+      success,
+      title: '登录',
+    });
+    return;
+  }
+
+  res.render('login', { error, success, title: '登录' });
 });
 
 router.post('/login/password', async (req: Request, res: Response) => {
-  const { identifier, password, redirect } = req.body;
+  const { identifier, password } = req.body;
 
   try {
     const user = await userService.findByIdentifier(identifier);
     if (!user) {
-      return res.render('login', {
-        error: '用户不存在',
-        redirect: redirect || '/',
-        title: '登录',
-      });
+      return res.render('login', { error: '用户不存在', title: '登录' });
     }
 
     const valid = await userService.verifyPassword(user, password);
     if (!valid) {
-      return res.render('login', {
-        error: '密码错误',
-        redirect: redirect || '/',
-        title: '登录',
-      });
+      return res.render('login', { error: '密码错误', title: '登录' });
     }
 
-    const token = signAccessToken({ userId: user.id, email: user.email });
-    res.cookie('access_token', token, {
-      httpOnly: true,
-      maxAge: 3600 * 1000,
-      sameSite: 'lax',
-    });
-    if (req.session) {
-      req.session.user = { userId: user.id, email: user.email };
-    }
-
-    res.redirect(redirect || '/');
+    redirectAfterLogin(req, res, user.id, user.email);
   } catch (error) {
     console.error('Login error:', error);
-    res.render('login', {
-      error: '登录失败，请稍后重试',
-      redirect: redirect || '/',
-      title: '登录',
-    });
+    res.render('login', { error: '登录失败，请稍后重试', title: '登录' });
   }
 });
 
@@ -106,25 +124,22 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     if (pendingOAuth) {
+      const provider = pendingOAuth.provider as 'github' | 'google' | 'wechat';
+      await oauthAccountService.createOrUpdate(user.id, provider, pendingOAuth.userInfo as OAuthUserInfo);
       delete req.session!.pendingOAuth;
-      res.redirect(`/auth/${pendingOAuth.provider}/callback?complete_registration=1&user_id=${user.id}`);
+
+      redirectAfterLogin(req, res, user.id, user.email);
       return;
     }
 
-    const token = signAccessToken({ userId: user.id, email: user.email });
-    res.cookie('access_token', token, {
-      httpOnly: true,
-      maxAge: 3600 * 1000,
-      sameSite: 'lax',
-    });
-    if (req.session) {
-      req.session.user = { userId: user.id, email: user.email };
-    }
-    res.redirect('/');
-  } catch (error) {
+    redirectAfterLogin(req, res, user.id, user.email);
+  } catch (error: any) {
     console.error('Registration error:', error);
+    const duplicateMsg = error?.message?.includes('UNIQUE')
+      ? '该邮箱或手机号已被注册'
+      : '注册失败，请稍后重试';
     res.render('register', {
-      error: '注册失败，请稍后重试',
+      error: duplicateMsg,
       provider: pendingOAuth?.provider,
       userInfo: pendingOAuth?.userInfo,
       title: '完善注册信息',

@@ -2,8 +2,6 @@ import { Request, Response, Router } from 'express';
 import { getProvider, isValidProvider, getProviderDisplayName } from '../providers';
 import { oauthAccountService, OAuthUserInfo } from '../services/OAuthAccountService';
 import { userService } from '../services/UserService';
-import { oauthService } from '../services/OAuthService';
-import { generateState, generateCodeVerifier, generateCodeChallenge } from '../utils/pkce';
 import { signAccessToken } from '../utils/jwt';
 import { authRequired, getCurrentUser } from '../middleware/auth';
 import { ProviderType } from '../entities/OAuthAccount';
@@ -16,26 +14,21 @@ router.get('/:provider', (req: Request, res: Response) => {
     return res.status(400).json({ error: '不支持的身份提供商' });
   }
 
-  const state = generateState();
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = generateCodeChallenge(codeVerifier);
+  const currentUser = getCurrentUser(req);
+  const state = `${provider}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   if (req.session) {
     req.session.oauthState = state;
-    req.session.oauthCodeVerifier = codeVerifier;
-    req.session.oauthClientId = req.query.client_id as string;
-    req.session.oauthRedirectUri = req.query.redirect_uri as string;
-    req.session.oauthScope = (req.query.scope as string)?.split(' ') || ['openid'];
   }
 
   const oauthProvider = getProvider(provider);
-  const authUrl = oauthProvider!.getAuthorizationUrl(state, codeChallenge, 'S256');
+  const authUrl = oauthProvider!.getAuthorizationUrl(state);
   res.redirect(authUrl);
 });
 
 router.get('/:provider/callback', async (req: Request, res: Response) => {
   const { provider } = req.params;
-  const { code, state, error, complete_registration, user_id } = req.query;
+  const { code, state, error } = req.query;
 
   if (error) {
     return res.redirect(`/login?error=${encodeURIComponent('授权被拒绝或失败')}`);
@@ -45,57 +38,38 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     return res.status(400).json({ error: '不支持的身份提供商' });
   }
 
-  if (complete_registration && user_id) {
-    const pendingOAuth = req.session?.pendingOAuth;
-    if (!pendingOAuth) {
-      return res.redirect('/login?error=会话已过期，请重新登录');
-    }
-    try {
-      await oauthAccountService.createOrUpdate(
-        user_id as string,
-        provider,
-        pendingOAuth.userInfo as OAuthUserInfo
-      );
-      const user = await userService.findById(user_id as string);
-      if (!user) {
-        return res.redirect('/login?error=用户不存在');
-      }
-
-      const token = signAccessToken({ userId: user.id, email: user.email });
-      res.cookie('access_token', token, {
-        httpOnly: true,
-        maxAge: 3600 * 1000,
-        sameSite: 'lax',
-      });
-      if (req.session) {
-        req.session.user = { userId: user.id, email: user.email };
-        delete req.session.pendingOAuth;
-      }
-      return res.redirect('/');
-    } catch (err) {
-      console.error('Complete registration error:', err);
-      return res.redirect('/login?error=账号绑定失败');
-    }
-  }
-
   if (req.session?.oauthState && req.session.oauthState !== state) {
-    return res.redirect('/login?error=无效的state参数');
+    return res.redirect('/login?error=' + encodeURIComponent('无效的state参数'));
   }
 
   if (!code) {
-    return res.redirect('/login?error=缺少授权码');
+    return res.redirect('/login?error=' + encodeURIComponent('缺少授权码'));
   }
 
   try {
     const oauthProvider = getProvider(provider)!;
     const userInfo = await oauthProvider.exchangeCodeForToken(code as string);
 
+    if (req.session) {
+      delete req.session.oauthState;
+    }
+
+    const bindUserId = req.session?.oauthBindUserId;
+    if (bindUserId) {
+      delete req.session!.oauthBindUserId;
+
+      const existingAccount = await oauthAccountService.findByProvider(provider, userInfo.providerUserId);
+      if (existingAccount && existingAccount.userId !== bindUserId) {
+        return res.redirect('/profile?error=' + encodeURIComponent('该三方账号已被其他用户绑定'));
+      }
+
+      await oauthAccountService.createOrUpdate(bindUserId, provider, userInfo);
+      return res.redirect('/profile?success=' + encodeURIComponent(`${getProviderDisplayName(provider)}绑定成功`));
+    }
+
     if (!userInfo.email && !userInfo.phone) {
       if (req.session) {
-        req.session.pendingOAuth = {
-          provider,
-          userInfo,
-        };
+        req.session.pendingOAuth = { provider, userInfo };
       }
       return res.redirect('/register');
     }
@@ -104,18 +78,12 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
 
     if (result.needsRegistration) {
       if (req.session) {
-        req.session.pendingOAuth = {
-          provider,
-          userInfo,
-        };
+        req.session.pendingOAuth = { provider, userInfo };
       }
       return res.redirect('/register');
     }
 
-    const token = signAccessToken({
-      userId: result.user.id,
-      email: result.user.email,
-    });
+    const token = signAccessToken({ userId: result.user.id, email: result.user.email });
     res.cookie('access_token', token, {
       httpOnly: true,
       maxAge: 3600 * 1000,
@@ -123,8 +91,22 @@ router.get('/:provider/callback', async (req: Request, res: Response) => {
     });
     if (req.session) {
       req.session.user = { userId: result.user.id, email: result.user.email };
-      delete req.session.oauthState;
-      delete req.session.oauthCodeVerifier;
+    }
+
+    if (req.session?.pendingAuthorize) {
+      const pa = req.session.pendingAuthorize;
+      delete req.session.pendingAuthorize;
+      const params = new URLSearchParams({
+        client_id: pa.client_id,
+        redirect_uri: pa.redirect_uri,
+        response_type: 'code',
+        scope: pa.scope,
+      });
+      if (pa.code_challenge) {
+        params.set('code_challenge', pa.code_challenge);
+        params.set('code_challenge_method', pa.code_challenge_method);
+      }
+      return res.redirect(`/oauth2/authorize?${params.toString()}`);
     }
 
     const successMsg = result.merged

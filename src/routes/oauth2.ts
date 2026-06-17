@@ -1,6 +1,6 @@
 import { Request, Response, Router } from 'express';
 import { oauthService } from '../services/OAuthService';
-import { generateState, generateCodeVerifier, generateCodeChallenge } from '../utils/pkce';
+import { generateState } from '../utils/pkce';
 
 const router = Router();
 
@@ -30,9 +30,16 @@ router.get('/authorize', (req: Request, res: Response) => {
 
   const user = (req as any).user;
   if (!user) {
-    return res.redirect(
-      `/login?redirect=${encodeURIComponent('/oauth2/authorize?' + req.originalUrl.split('?')[1])}`
-    );
+    if (req.session) {
+      req.session.pendingAuthorize = {
+        client_id: client_id as string,
+        redirect_uri: redirect_uri as string,
+        scope: (scope as string) || 'openid',
+        code_challenge: (code_challenge as string) || '',
+        code_challenge_method: (code_challenge_method as string) || '',
+      };
+    }
+    return res.redirect('/login');
   }
 
   res.render('authorize', {
@@ -69,9 +76,9 @@ router.post('/authorize', async (req: Request, res: Response) => {
     client_id,
     user.userId,
     redirect_uri,
-    scope,
-    code_challenge,
-    code_challenge_method
+    scope ? scope.split(' ') : ['openid'],
+    code_challenge || undefined,
+    code_challenge_method || undefined
   );
 
   const redirectUrl = new URL(redirect_uri);

@@ -1,4 +1,4 @@
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { OAuthAccount, ProviderType } from '../entities/OAuthAccount';
 import { User } from '../entities/User';
 import { AppDataSource } from '../data-source';
@@ -119,13 +119,34 @@ export class OAuthAccountService {
 
     if (!targetUser) {
       const needsRegistration = !info.email;
-      targetUser = await userService.create({
-        email: info.email,
-        phone: info.phone,
-        nickname: info.nickname,
-        avatar: info.avatar,
-        emailVerified: !!info.email,
-      });
+      try {
+        targetUser = await userService.create({
+          email: info.email,
+          phone: info.phone,
+          nickname: info.nickname,
+          avatar: info.avatar,
+          emailVerified: !!info.email,
+        });
+      } catch (err: any) {
+        if (err?.message?.startsWith('UNIQUE_CONSTRAINT:')) {
+          if (info.email) targetUser = await userService.findByEmail(info.email);
+          if (!targetUser && info.phone) targetUser = await userService.findByPhone(info.phone);
+          if (targetUser) {
+            merged = true;
+            const existingTargetUserId = targetUser.id;
+            await this.createOrUpdate(existingTargetUserId, provider, info);
+            let needUpdate = false;
+            const updateData: Partial<User> = {};
+            if (!targetUser.nickname && info.nickname) { updateData.nickname = info.nickname; needUpdate = true; }
+            if (!targetUser.avatar && info.avatar) { updateData.avatar = info.avatar; needUpdate = true; }
+            if (needUpdate) {
+              targetUser = (await userService.update(existingTargetUserId, updateData)) || targetUser;
+            }
+            return { user: targetUser, isNewUser: false, needsRegistration: false, merged };
+          }
+        }
+        throw err;
+      }
       await this.createOrUpdate(targetUser.id, provider, info);
       return { user: targetUser, isNewUser: true, needsRegistration, merged: false };
     }
