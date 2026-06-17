@@ -1,0 +1,38 @@
+<%- include('header') %>
+
+<div class="card" style="max-width: 500px; margin: 40px auto;">
+    <h2>授权确认</h2>
+
+    <div class="alert alert-info">
+        应用 <strong><%= clientId %></strong> 请求访问您的账号信息。
+    </div>
+
+    <div class="section">
+        <h3>请求的权限</h3>
+        <ul style="list-style: none; line-height: 2;">
+            <% scope.forEach(function(s) { %>
+                <li>✅ <%= s %></li>
+            <% }); %>
+        </ul>
+    </div>
+
+    <% if (codeChallenge) { %>
+        <div style="padding: 8px 12px; background: #e3f2fd; color: #1976d2; border-radius: 6px; margin-bottom: 20px; font-size: 13px;">
+            🔐 PKCE 安全保护已启用 (<%= codeChallengeMethod %>)
+        </div>
+    <% } %>
+
+    <form method="POST" action="/oauth2/authorize">
+        <input type="hidden" name="client_id" value="<%= clientId %>">
+        <input type="hidden" name="redirect_uri" value="<%= redirectUri %>">
+        <input type="hidden" name="scope" value="<%= scope.join(' ') %>">
+        <input type="hidden" name="code_challenge" value="<%= codeChallenge || '' %>">
+        <input type="hidden" name="code_challenge_method" value="<%= codeChallengeMethod || '' %>">
+        <div class="actions">
+            <button type="submit" name="action" value="allow" class="btn btn-primary">授权</button>
+            <button type="submit" name="action" value="deny" class="btn btn-secondary">拒绝</button>
+        </div>
+    </form>
+</div>
+
+<%- include('footer') %>

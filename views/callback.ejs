@@ -1,0 +1,39 @@
+<%- include('header') %>
+
+<div class="card" style="max-width: 500px; margin: 40px auto;">
+    <h2>OAuth 回调结果</h2>
+
+    <% if (error) { %>
+        <div class="alert alert-error">
+            授权失败: <%= error %>
+        </div>
+    <% } else { %>
+        <div class="alert alert-success">
+            授权成功！已收到授权码。
+        </div>
+
+        <div class="section">
+            <h3>授权信息</h3>
+            <% if (code) { %>
+                <p><strong>Authorization Code:</strong></p>
+                <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-family: monospace; word-break: break-all; font-size: 12px;">
+                    <%= code %>
+                </div>
+            <% } %>
+            <% if (state) { %>
+                <p style="margin-top: 16px;"><strong>State:</strong> <code><%= state %></code></p>
+            <% } %>
+        </div>
+
+        <div class="section">
+            <h3>下一步</h3>
+            <p class="hint">您可以使用此授权码通过 <code>/oauth2/token</code> 端点换取访问令牌，或直接访问首页。</p>
+        </div>
+    <% } %>
+
+    <div class="actions">
+        <a href="/" class="btn btn-primary">返回首页</a>
+    </div>
+</div>
+
+<%- include('footer') %>

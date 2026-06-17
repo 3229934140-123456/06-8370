@@ -1,0 +1,175 @@
+<%- include('header') %>
+
+<% if (success) { %>
+    <div class="alert alert-success"><%= success %></div>
+<% } %>
+<% if (error) { %>
+    <div class="alert alert-error"><%= error %></div>
+<% } %>
+
+<div class="card">
+    <h2>个人中心</h2>
+
+    <div class="section">
+        <h3>基本信息</h3>
+        <div class="user-info">
+            <div class="avatar">
+                <% if (user.avatar) { %>
+                    <img src="<%= user.avatar %>" alt="avatar">
+                <% } else { %>
+                    <%= (user.nickname || user.email || 'U').charAt(0).toUpperCase() %>
+                <% } %>
+            </div>
+            <div>
+                <p style="font-size: 18px; font-weight: 500;"><%= user.nickname || '未设置昵称' %></p>
+                <p style="color: #888; font-size: 13px;">ID: <%= user.id.substring(0, 16) %>...</p>
+            </div>
+        </div>
+
+        <form method="POST" action="/profile/update">
+            <div class="row">
+                <div class="col">
+                    <div class="form-group">
+                        <label>昵称</label>
+                        <input type="text" name="nickname" value="<%= user.nickname || '' %>">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label>邮箱</label>
+                        <input type="email" name="email" value="<%= user.email || '' %>">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label>手机号</label>
+                        <input type="tel" name="phone" value="<%= user.phone || '' %>">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary">保存修改</button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h3>密码设置</h3>
+        <form method="POST" action="/profile/password">
+            <% if (user.passwordHash) { %>
+                <div class="form-group">
+                    <label>当前密码</label>
+                    <input type="password" name="current_password" placeholder="请输入当前密码">
+                </div>
+            <% } %>
+            <div class="row">
+                <div class="col">
+                    <div class="form-group">
+                        <label>新密码</label>
+                        <input type="password" name="new_password" placeholder="至少6位">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label>确认新密码</label>
+                        <input type="password" name="confirm_password" placeholder="再次输入新密码">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-secondary">
+                <%= user.passwordHash ? '修改密码' : '设置密码' %>
+            </button>
+        </form>
+    </div>
+
+    <div class="section">
+        <h3>第三方账号管理</h3>
+        <% if (!canUnbind) { %>
+            <div class="alert alert-info">
+                当前仅有一种登录方式，无法解绑。请先设置密码或绑定其他账号后再尝试解绑。
+            </div>
+        <% } %>
+
+        <ul class="account-list">
+            <% availableProviders.forEach(function(p) { %>
+                <% const account = oauthAccounts.find(a => a.provider === p.type); %>
+                <li>
+                    <div class="account-info">
+                        <span class="provider-icon">
+                            <% if (p.type === 'github') { %>🐙<% } %>
+                            <% if (p.type === 'google') { %>🔍<% } %>
+                            <% if (p.type === 'wechat') { %>💬<% } %>
+                        </span>
+                        <div>
+                            <strong><%= p.name %></strong>
+                            <% if (account) { %>
+                                <span class="status-bound account-status" style="margin-left: 8px;">已绑定</span>
+                                <% if (account.tokenRefreshFailed) { %>
+                                    <span class="status-failed account-status" style="margin-left: 8px;">Token失效，请重新绑定</span>
+                                <% } %>
+                            <% } else { %>
+                                <span class="status-unbound account-status" style="margin-left: 8px;">未绑定</span>
+                            <% } %>
+                        </div>
+                    </div>
+                    <div>
+                        <% if (account) { %>
+                            <form method="POST" action="/profile/unbind/<%= p.type %>" style="display: inline;" onsubmit="return confirm('确定要解绑<%= p.name %>吗？');">
+                                <button type="submit" class="btn btn-danger" <%= !canUnbind ? 'disabled' : '' %>>
+                                    解绑
+                                </button>
+                            </form>
+                        <% } else { %>
+                            <form method="POST" action="/profile/bind/<%= p.type %>" style="display: inline;">
+                                <button type="submit" class="btn btn-primary">绑定</button>
+                            </form>
+                        <% } %>
+                    </div>
+                </li>
+            <% }); %>
+            <li>
+                <div class="account-info">
+                    <span class="provider-icon">🔑</span>
+                    <div>
+                        <strong>密码登录</strong>
+                        <% if (user.passwordHash) { %>
+                            <span class="status-bound account-status" style="margin-left: 8px;">已启用</span>
+                        <% } else { %>
+                            <span class="status-unbound account-status" style="margin-left: 8px;">未设置</span>
+                        <% } %>
+                    </div>
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <div class="section">
+        <h3>Token 状态</h3>
+        <p class="hint" style="margin-bottom: 12px;">点击下方按钮检查并刷新所有第三方账号的访问令牌。如果刷新失败，将自动降级为密码登录并发送提醒邮件。</p>
+        <button class="btn btn-secondary" onclick="refreshTokens()">检查并刷新 Tokens</button>
+        <div id="refresh-results" style="margin-top: 16px;"></div>
+    </div>
+</div>
+
+<script>
+async function refreshTokens() {
+    const resultsDiv = document.getElementById('refresh-results');
+    resultsDiv.innerHTML = '<p>正在刷新...</p>';
+    try {
+        const res = await fetch('/api/refresh-tokens', { method: 'POST' });
+        const data = await res.json();
+        let html = '';
+        data.results.forEach(r => {
+            const color = r.success ? '#155724' : '#721c24';
+            const bg = r.success ? '#d4edda' : '#f8d7da';
+            html += `<div style="padding: 8px 12px; background: ${bg}; color: ${color}; border-radius: 6px; margin-bottom: 8px;">
+                <strong>${r.provider.toUpperCase()}</strong>: ${r.success ? '刷新成功' : '刷新失败 - ' + r.error}
+            </div>`;
+        });
+        resultsDiv.innerHTML = html;
+        setTimeout(() => location.reload(), 2000);
+    } catch (err) {
+        resultsDiv.innerHTML = '<p style="color: #721c24;">刷新请求失败</p>';
+    }
+}
+</script>
+
+<%- include('footer') %>

@@ -1,0 +1,88 @@
+<%- include('header') %>
+
+<% if (success) { %>
+    <div class="alert alert-success"><%= success %></div>
+<% } %>
+
+<div class="card">
+    <% if (typeof user !== 'undefined' && user) { %>
+        <div class="user-info">
+            <div class="avatar">
+                <% if (user.avatar) { %>
+                    <img src="<%= user.avatar %>" alt="avatar">
+                <% } else { %>
+                    <%= (user.nickname || user.email || 'U').charAt(0).toUpperCase() %>
+                <% } %>
+            </div>
+            <div>
+                <h2 style="margin-bottom: 4px;"><%= user.nickname || '用户' %></h2>
+                <p style="color: #888; font-size: 14px;">
+                    <%= user.email || user.phone || '未绑定联系方式' %>
+                </p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>已绑定的登录方式</h3>
+            <% if (typeof oauthAccounts !== 'undefined' && oauthAccounts.length > 0) { %>
+                <ul class="account-list">
+                    <% oauthAccounts.forEach(function(account) { %>
+                        <li>
+                            <div class="account-info">
+                                <span class="provider-icon">
+                                    <% if (account.provider === 'github') { %>🐙<% } %>
+                                    <% if (account.provider === 'google') { %>🔍<% } %>
+                                    <% if (account.provider === 'wechat') { %>💬<% } %>
+                                </span>
+                                <div>
+                                    <strong><%= account.displayName %></strong>
+                                    <% if (account.tokenRefreshFailed) { %>
+                                        <span class="status-failed account-status">刷新失败，请重新授权</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </li>
+                    <% }); %>
+                </ul>
+            <% } else { %>
+                <p style="color: #888;">暂未绑定任何第三方账号</p>
+            <% } %>
+            <% if (typeof user !== 'undefined' && user && user.passwordHash) { %>
+                <div style="margin-top: 12px; padding: 12px; background: #f9f9f9; border-radius: 8px;">
+                    <span>🔑 密码登录</span>
+                    <span class="status-bound account-status" style="margin-left: 8px;">已启用</span>
+                </div>
+            <% } %>
+        </div>
+
+        <div class="actions">
+            <a href="/profile" class="btn btn-primary">进入个人中心</a>
+            <a href="/logout" class="btn btn-secondary">退出登录</a>
+        </div>
+    <% } else { %>
+        <h2>欢迎使用 OAuth2 聚合认证服务</h2>
+        <p style="color: #666; margin-bottom: 24px;">
+            本服务支持通过 GitHub、Google、微信等第三方账号快捷登录，
+            同时提供统一的账号管理和 PKCE 安全扩展保护。
+        </p>
+
+        <div class="section">
+            <h3>功能特性</h3>
+            <ul style="list-style: none; line-height: 2;">
+                <li>✅ 集成 GitHub / Google / 微信 三大身份提供商</li>
+                <li>✅ 统一账号体系，邮箱或手机号为唯一标识</li>
+                <li>✅ 多账号自动合并，支持绑定多种登录方式</li>
+                <li>✅ 授权码流程 + PKCE 扩展，防止授权码截获攻击</li>
+                <li>✅ Token 刷新失败自动降级，邮件提醒重新授权</li>
+                <li>✅ 个人中心管理绑定账号，安全解绑保护</li>
+            </ul>
+        </div>
+
+        <div class="actions">
+            <a href="/login" class="btn btn-primary">立即登录</a>
+            <a href="/register" class="btn btn-secondary">注册账号</a>
+        </div>
+    <% } %>
+</div>
+
+<%- include('footer') %>
